@@ -1,0 +1,7 @@
+node_modules
+dist
+chrome-profile
+downloads
+debug
+data
+.venv

@@ -1,0 +1,30 @@
+# Both services use the host network: nginx reaches the backend on 127.0.0.1:8000
+# and each session's noVNC on 127.0.0.1:61xx (all closed to the LAN). The backend
+# starts one virtual desktop + Chrome per active session; nginx exposes them at
+# /vnc/ only after the backend authorizes the login cookie.
+services:
+  backend:
+    container_name: paperdownloader-backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    user: "1000:1000"
+    network_mode: host
+    shm_size: 2gb
+    restart: unless-stopped
+    environment:
+      - PD_MAX_SESSIONS=${PD_MAX_SESSIONS:-6}
+      - PD_ADMIN_USER
+      - PD_ADMIN_PASSWORD
+    volumes:
+      - ./:/app
+
+  nginx:
+    container_name: paperdownloader-nginx
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    network_mode: host
+    depends_on:
+      - backend
+    restart: unless-stopped
