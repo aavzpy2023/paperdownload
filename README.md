@@ -8,6 +8,9 @@ ScienceDirect, PubMed, Scopus, Web of Science, IEEE Xplore and any publisher rea
 
 ![Paper Downloader](docs/main_app.png)
 
+![The download queue shows the status of every reference: downloaded, pending or failed.](docs/main_page.png)
+*The download queue shows the status of every reference: downloaded, pending or failed.*
+
 ## What it does
 
 - **Reads your reference files.** Upload a `.bib` (BibTeX) or `.nbib` (PubMed/MEDLINE) file; every database can export one of them. Other formats are not accepted.

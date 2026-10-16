@@ -8,6 +8,9 @@ ScienceDirect, PubMed, Scopus, Web of Science, IEEE Xplore y cualquier editorial
 
 ![Paper Downloader](docs/main_app.png)
 
+![La cola de descargas muestra el estado de cada referencia: descargada, pendiente o fallida.](docs/main_page.png)
+*La cola de descargas muestra el estado de cada referencia: descargada, pendiente o fallida.*
+
 ## Qué hace
 
 - **Lee tus archivos de referencias.** Sube un `.bib` (BibTeX) o un `.nbib` (PubMed/MEDLINE); todas las bases de datos pueden exportar alguno de los dos. Otros formatos no se aceptan.
