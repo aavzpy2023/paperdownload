@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import auth, browser
+from . import auth, browser, desktop
 from .job import Job
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -19,6 +19,8 @@ VIEWER_IDLE_SECONDS = 5 * 60  # the remote view closes itself when the page stop
 SCREEN = "1366x768x24"
 X_SOCKETS = Path("/tmp/.X11-unix")
 NOVNC_DIR = "/usr/share/novnc"
+FLUXBOX_DIR = "/opt/pd/fluxbox"
+WATCH_SECONDS = 3
 
 
 @dataclass
@@ -136,7 +138,8 @@ class Manager:
             time.sleep(0.1)
         else:
             raise RuntimeError("Virtual display did not start")
-        ws.procs.append(_spawn(["fluxbox"], {**os.environ, "DISPLAY": f":{display}"}))
+        # A locked-down window manager (no menus, shortcuts or "run" dialog): see backend/fluxbox.
+        ws.procs.append(_spawn(["fluxbox", "-rc", f"{FLUXBOX_DIR}/init", "-no-slit", "-no-toolbar"], {**os.environ, "DISPLAY": f":{display}"}))
         ws.job.chrome = browser.Chrome(ws.profile_dir, 9300 + n, f":{display}")
 
     def open_viewer(self, ws: Workspace) -> None:
@@ -213,13 +216,34 @@ class Manager:
                 elif ws.slot is not None:
                     self._stop_desktop(ws)
 
+    def revive_closed_browsers(self) -> None:
+        """While a remote view is open, bring Chrome back if the person closed it or it crashed."""
+        with self._lock:
+            spaces = [w for w in self._spaces.values() if w.viewer_on and w.job.chrome is not None]
+        for ws in spaces:
+            if ws.slot is not None:
+                try:
+                    desktop.keep_windows_usable(f":{100 + ws.slot}")
+                except Exception:
+                    pass  # the display may be shutting down
+            chrome = ws.job.chrome
+            if chrome is not None and chrome.proc is not None and chrome.proc.poll() is not None and not chrome.debugger_up():
+                try:
+                    chrome.launch("about:blank")
+                except Exception:
+                    pass  # try again on the next tick
+
     def start_reaper(self) -> None:
-        def loop() -> None:
+        def reap() -> None:
             while not self._stopping.wait(60):
                 self.reap_idle()
 
-        self._reaper = threading.Thread(target=loop, daemon=True)
-        self._reaper.start()
+        def watch() -> None:
+            while not self._stopping.wait(WATCH_SECONDS):
+                self.revive_closed_browsers()
+
+        for target in (reap, watch):
+            threading.Thread(target=target, daemon=True).start()
 
     def shutdown(self) -> None:
         self._stopping.set()

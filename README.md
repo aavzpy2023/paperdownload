@@ -113,6 +113,12 @@ The start script prints that address; otherwise find the IP in your network sett
 - **Your institution and publisher passwords are never saved.** Chrome's password manager is disabled; only the login
   session (cookies) stays in the browser profile of `admin` and `user` accounts. Guests keep nothing.
 - The app's own passwords are stored hashed.
+- **The remote browser is locked down.** The remote desktop has no menus, shortcuts, terminal or "run a command" dialog; Chrome blocks
+  `file://`, `chrome://`, extensions, file pickers and printing; and all its traffic goes through a filter that refuses private,
+  loopback and local-network addresses, so nobody can reach the app's own services, other people's browsers or your LAN from it.
+  If someone closes or minimizes the browser while the view is open, it is brought back automatically.
+- Residual risk: Chrome runs with its internal sandbox off (required inside Docker) as the same container user as the app. The
+  protections above keep people inside publisher sites; do not give accounts to people you would not trust with a browser on this machine.
 - Only port **81** is open (to your local network; see below to restrict it). The backend and the remote browsers live on a private Docker network, and the remote screen is
   shown only while you are verifying access, to signed-in users.
 - The app serves plain HTTP. **Do not expose it directly to the internet**; use it on your own computer, behind a VPN, or
@@ -144,6 +150,7 @@ Set these in a `.env` file next to `docker-compose.yml` (the start script create
 | `PD_MAX_SESSIONS` | `6` | People that can have an active browser at the same time (about 1 GB of RAM each) |
 | `PD_START_URL` | *(empty)* | Default institution page for people who have not set their own |
 | `PD_SECRET_KEY` | *(generated)* | Key that signs login sessions |
+| `PD_ALLOW_PRIVATE_HOSTS` | *(off)* | Set to `1` only if your institution's login page lives on a private address; it lets the remote browser reach private networks |
 | `PD_BIND` | `0.0.0.0` | Address the app listens on; `127.0.0.1` makes it reachable only from this computer |
 
 To use another port, change `"81:81"` in `docker-compose.yml`, for example `"8081:81"`.

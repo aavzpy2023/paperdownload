@@ -1,0 +1,31 @@
+{
+  "PasswordManagerEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "AutofillAddressEnabled": false,
+  "URLBlocklist": [
+    "file://*",
+    "chrome://*",
+    "chrome-untrusted://*",
+    "chrome-extension://*",
+    "devtools://*",
+    "view-source:*",
+    "javascript:*",
+    "ftp://*"
+  ],
+  "URLAllowlist": [
+    "chrome://newtab/*",
+    "chrome://new-tab-page/*",
+    "chrome-untrusted://new-tab-page/*"
+  ],
+  "ExtensionInstallBlocklist": [
+    "*"
+  ],
+  "AllowFileSelectionDialogs": false,
+  "PrintingEnabled": false,
+  "IncognitoModeAvailability": 1,
+  "BookmarkBarEnabled": false,
+  "EditBookmarksEnabled": false,
+  "BrowserSignin": 0,
+  "SyncDisabled": true,
+  "TaskManagerEndProcessEnabled": false
+}

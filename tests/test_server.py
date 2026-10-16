@@ -238,3 +238,14 @@ def test_only_admins_can_see_or_change_users(client):
     client.cookies.clear()
     assert client.get("/api/users").status_code == 401
     assert [u["username"] for u in client.get("/api/users", headers=admin).json()] == ["admin", "ana", "visitor"]
+
+
+def test_admin_reset_password_replaces_the_old_one(client):
+    admin = login(client)
+    add_user(client, admin, "ana", "user")
+    ana_id = next(u["id"] for u in client.get("/api/users", headers=admin).json() if u["username"] == "ana")
+
+    assert client.patch(f"/api/users/{ana_id}", json={"password": "brandnew1"}, headers=admin).status_code == 200
+    assert login(client, "ana", "secret1") is None
+    assert login(client, "ana", "brandnew1") is not None
+    assert client.patch(f"/api/users/{ana_id}", json={"password": "123"}, headers=admin).status_code == 422

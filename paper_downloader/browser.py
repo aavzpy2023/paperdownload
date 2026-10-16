@@ -61,6 +61,14 @@ class Chrome:
                 )
                 urllib.request.urlopen(req, timeout=5)
 
+    @staticmethod
+    def _egress_flags() -> list[str]:
+        """Send all traffic, loopback included, through the filtering proxy (see egress.py)."""
+        port = os.environ.get("PD_PROXY_PORT")
+        if not port:
+            return []
+        return [f"--proxy-server=http://127.0.0.1:{port}", "--proxy-bypass-list=<-loopback>", "--disable-quic"]
+
     def _spawn(self, url: str | None) -> None:
         self.work_dir.mkdir(parents=True, exist_ok=True)
         # No Chrome of ours is running here, so these locks are leftovers of a killed one and
@@ -78,6 +86,7 @@ class Chrome:
                 "--no-default-browser-check",
                 "--start-maximized",
                 *(["--no-sandbox"] if os.environ.get("PD_CHROME_NO_SANDBOX") else []),
+                *self._egress_flags(),
                 *([url] if url else []),
             ],
             env=env,

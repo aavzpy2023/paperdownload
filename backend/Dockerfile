@@ -7,9 +7,10 @@ RUN apt-get update \
     && rm -rf /tmp/chrome.deb /var/lib/apt/lists/*
 
 # Chrome must never offer to remember the passwords people type into publisher sites.
-RUN mkdir -p /etc/opt/chrome/policies/managed \
-    && echo '{"PasswordManagerEnabled": false, "AutofillCreditCardEnabled": false, "AutofillAddressEnabled": false}' \
-    > /etc/opt/chrome/policies/managed/paper-downloader.json
+COPY backend/chrome-policy.json /etc/opt/chrome/policies/managed/paper-downloader.json
+
+# Window manager config without menus, shortcuts or a "run a command" dialog (owned by root: read-only for users).
+COPY backend/fluxbox /opt/pd/fluxbox
 
 WORKDIR /app
 COPY pyproject.toml .
@@ -17,7 +18,7 @@ RUN python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml
     | pip install --no-cache-dir -r /dev/stdin
 COPY paper_downloader ./paper_downloader
 
-ENV HOME=/home/pd PYTHONPATH=/app PYTHONUNBUFFERED=1 PD_CHROME_NO_SANDBOX=1
+ENV HOME=/home/pd PYTHONPATH=/app PYTHONUNBUFFERED=1 PD_CHROME_NO_SANDBOX=1 PD_PROXY_PORT=3128
 RUN useradd -u 1000 -m -d /home/pd pd \
     && mkdir -p /tmp/.X11-unix /app/data /app/downloads /app/debug \
     && chmod 1777 /tmp/.X11-unix \

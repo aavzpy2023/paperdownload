@@ -1,3 +1,4 @@
+import os
 import random
 import tempfile
 import time
@@ -12,7 +13,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
-from . import auth, browser
+from . import auth, browser, egress
 from .bib import parse_references
 from .providers import PROVIDERS
 from .throttle import throttle, url_key
@@ -28,6 +29,8 @@ Role = Literal["admin", "user", "guest"]
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     auth.init_db()
+    if port := os.environ.get("PD_PROXY_PORT"):
+        egress.start(int(port))
     manager.start_reaper()
     yield
     manager.shutdown()

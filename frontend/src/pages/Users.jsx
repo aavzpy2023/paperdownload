@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import { useAuth } from '../auth.jsx'
-import { Alert, Button, Card } from '../ui.jsx'
+import { Alert, Button, Card, Modal, cls } from '../ui.jsx'
 
 const EMPTY = { username: '', password: '', role: 'user' }
 const field = 'rounded-lg border-slate-300 text-sm focus:border-sky-500 focus:ring-sky-500'
@@ -12,6 +12,8 @@ export default function Users() {
   const [users, setUsers] = useState([])
   const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState('')
+  const [dialog, setDialog] = useState(null)
+  const [newPassword, setNewPassword] = useState('')
 
   const load = useCallback(() => api.users().then(setUsers).catch((e) => setError(e.message)), [])
   useEffect(() => { load() }, [load])
@@ -25,12 +27,17 @@ export default function Users() {
     e.preventDefault()
     run(async () => { await api.createUser(form); setForm(EMPTY) })
   }
-  const resetPassword = (u) => {
-    const password = window.prompt(`New password for ${u.username} (min. 6 characters):`)
-    if (password) run(() => api.updateUser(u.id, { password }))
+  const close = () => { setDialog(null); setNewPassword('') }
+  const submitPassword = (e) => {
+    e.preventDefault()
+    const { user } = dialog
+    close()
+    run(() => api.updateUser(user.id, { password: newPassword }))
   }
-  const remove = (u) => {
-    if (window.confirm(`Delete user ${u.username}?`)) run(() => api.deleteUser(u.id))
+  const confirmDelete = () => {
+    const { user } = dialog
+    close()
+    run(() => api.deleteUser(user.id))
   }
 
   return (
@@ -72,8 +79,8 @@ export default function Users() {
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex justify-end gap-2">
-                        <Button onClick={() => resetPassword(u)}>Reset password</Button>
-                        <Button onClick={() => remove(u)} disabled={self}>Delete</Button>
+                        <Button onClick={() => setDialog({ kind: 'password', user: u })}><i className="fa-solid fa-key text-slate-400" /> Reset password</Button>
+                        <Button onClick={() => setDialog({ kind: 'delete', user: u })} disabled={self}><i className="fa-solid fa-trash text-slate-400" /> Delete</Button>
                       </div>
                     </td>
                   </tr>
@@ -83,6 +90,31 @@ export default function Users() {
           </table>
         </div>
       </div>
+      {dialog?.kind === 'password' && (
+        <Modal title={`Reset password for ${dialog.user.username}`} icon="fa-key" onClose={close}>
+          <form onSubmit={submitPassword} className="space-y-4">
+            <label className="block text-sm font-medium text-slate-700">New password
+              <input className={cls(field, 'mt-1 w-full')} type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} minLength={6} required autoFocus autoComplete="new-password" />
+            </label>
+            <p className="text-xs text-slate-500">At least 6 characters. Their current sessions keep working until they sign out.</p>
+            <div className="flex justify-end gap-2">
+              <Button onClick={close}>Cancel</Button>
+              <Button kind="primary" type="submit">Save password</Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {dialog?.kind === 'delete' && (
+        <Modal title={`Delete ${dialog.user.username}?`} icon="fa-trash" tone="rose" onClose={close}>
+          <p className="mb-5 text-sm text-slate-600">
+            This removes the account and its saved browser profile (including its signed-in sessions). Downloaded PDFs are kept.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button onClick={close} autoFocus>Cancel</Button>
+            <Button kind="danger" onClick={confirmDelete}>Delete user</Button>
+          </div>
+        </Modal>
+      )}
     </Card>
   )
 }

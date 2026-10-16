@@ -8,6 +8,7 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "python-multipart>=0.0.9",
     "pyjwt>=2.8",
+    "python-xlib>=0.33",
     "playwright>=1.45",
     "bibtexparser>=1.4,<2",
 ]

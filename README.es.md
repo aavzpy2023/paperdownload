@@ -113,6 +113,12 @@ El script de inicio muestra esa dirección; si no, busca la IP en la configuraci
 - **Las contraseñas de tu institución y de las editoriales nunca se guardan.** El administrador de contraseñas de Chrome está desactivado; solo la sesión
   de acceso (cookies) permanece en el perfil de las cuentas `admin` y `user`. Los invitados no conservan nada.
 - Las contraseñas propias de la app se guardan cifradas (hash).
+- **El navegador remoto está blindado.** El escritorio remoto no tiene menús, atajos, terminal ni cuadro para "ejecutar un comando"; Chrome bloquea
+  `file://`, `chrome://`, extensiones, selectores de archivos e impresión; y todo su tráfico pasa por un filtro que rechaza direcciones privadas,
+  de loopback y de la red local, de modo que desde ahí nadie puede llegar a los servicios de la propia app, a los navegadores de otras personas ni a tu red.
+  Si alguien cierra o minimiza el navegador mientras la vista está abierta, se restaura automáticamente.
+- Riesgo residual: Chrome corre con su sandbox interno desactivado (necesario dentro de Docker) y con el mismo usuario del contenedor que la app. Las
+  protecciones anteriores mantienen a la gente dentro de los sitios de las editoriales; no des cuentas a quien no confiarías un navegador en este equipo.
 - Solo está abierto el puerto **81** (a tu red local; abajo se explica cómo restringirlo). El backend y los navegadores remotos viven en una red privada de Docker, y la pantalla remota solo se
   muestra mientras verificas el acceso, a usuarios con sesión iniciada.
 - La app usa HTTP simple. **No la expongas directamente a internet**; úsala en tu propio computador, detrás de una VPN o
@@ -144,6 +150,7 @@ Defínelas en un archivo `.env` junto a `docker-compose.yml` (el script de inici
 | `PD_MAX_SESSIONS` | `6` | Personas que pueden tener un navegador activo a la vez (unos 1 GB de RAM cada una) |
 | `PD_START_URL` | *(vacío)* | Página institucional por defecto para quien no haya puesto la suya |
 | `PD_SECRET_KEY` | *(generada)* | Clave que firma las sesiones de acceso |
+| `PD_ALLOW_PRIVATE_HOSTS` | *(desactivado)* | Pon `1` solo si la página de acceso de tu institución está en una dirección privada; permite al navegador remoto llegar a redes privadas |
 | `PD_BIND` | `0.0.0.0` | Dirección en la que escucha la app; `127.0.0.1` la deja accesible solo desde este computador |
 
 Para usar otro puerto, cambia `"81:81"` en `docker-compose.yml`, por ejemplo `"8081:81"`.
