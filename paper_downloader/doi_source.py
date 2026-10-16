@@ -5,7 +5,7 @@ from playwright.sync_api import Page
 
 from .bib import Entry, clean_doi
 from .ebsco import NotFound, _slug
-from .publisher import IEEE_ARNUMBER, ieee_pdf
+from .publisher import IEEE_ARNUMBER, HumanCheck, ieee_pdf
 from .pubmed import from_publisher
 
 # Scopus, Web of Science and IEEE are indexes or portals without a stable search flow here:
@@ -27,7 +27,7 @@ def _publisher_href(page: Page, record_url: str) -> str:
     page.goto(record_url, wait_until="domcontentloaded")
     page.wait_for_timeout(8000)
     if HUMAN_CHECK in page.inner_text("body").lower():
-        raise NotFound("The database asks to verify you are human: solve it in the Remote browser and retry")
+        raise HumanCheck("The database asks to verify you are human: solve it in the remote browser and retry")
     link = page.locator("a[href]").filter(has_text=PUBLISHER_LINK).first
     if link.count() == 0:
         menu = page.locator("button, a").filter(has_text=FULL_TEXT_MENU).first

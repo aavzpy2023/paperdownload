@@ -1,4 +1,6 @@
+import random
 import tempfile
+import time
 import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -11,11 +13,13 @@ from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
 from . import auth, browser
-from .bib import parse_bib
+from .bib import parse_references
 from .providers import PROVIDERS
+from .throttle import throttle, url_key
 from .workspace import Workspace, manager
 
 COOKIE = "pd_token"
+OPEN_STAGGER = (2.0, 4.0)
 bearer = HTTPBearer(auto_error=False)
 
 Role = Literal["admin", "user", "guest"]
@@ -83,6 +87,7 @@ class Settings(BaseModel):
 class StartBody(BaseModel):
     indices: list[int] | None = None
     site: str = "sciencedirect"
+    sites: dict[str, list[int]] | None = None  # site -> row indices, for a selection that mixes databases
 
 
 class SiteBody(BaseModel):
@@ -192,7 +197,10 @@ def upload(bib: Annotated[UploadFile, File()], ws: Annotated[Workspace, Depends(
     job = ws.job
     if job.running:
         raise HTTPException(409, "A download is in progress")
-    entries = parse_bib(bib.file.read().decode("utf-8", errors="replace"))
+    try:
+        entries = parse_references(bib.file.read().decode("utf-8", errors="replace"), bib.filename or "")
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
     if not entries:
         raise HTTPException(400, "No entries with a title found")
     job.load(entries, bib.filename or "")
@@ -221,12 +229,20 @@ def preflight(ws: Annotated[Workspace, Depends(running_workspace)], body: SiteBo
     urls = ws.job.preflight_urls(body.site)
     if not urls:
         raise HTTPException(409, "Nothing pending for this database")
+    opened = []
     try:
         for url in urls:
+            if opened:
+                time.sleep(random.uniform(*OPEN_STAGGER))  # never open several publisher pages at once
+            if throttle.acquire(url_key(url), max_wait=30) == "cooldown":
+                continue
             ws.job.chrome.launch(url)
+            opened.append(url)
     except Exception as e:
         raise HTTPException(500, f"{type(e).__name__}: {e}") from None
-    return {"urls": urls}
+    if not opened:
+        raise HTTPException(409, "These publishers are cooling down after a human check; try again in a few minutes")
+    return {"urls": opened}
 
 
 @private.post("/verify")
@@ -235,6 +251,8 @@ def verify(ws: Annotated[Workspace, Depends(running_workspace)], body: SiteBody 
         raise HTTPException(400, f"Unknown site '{body.site}'")
     if ws.job.running:
         raise HTTPException(409, "A download is in progress")
+    if ws.job.verifying:
+        raise HTTPException(409, "A verification is already in progress")
     try:
         results = ws.job.verify_access(body.site)
     except Exception as e:
@@ -255,13 +273,16 @@ def dump(ws: Annotated[Workspace, Depends(running_workspace)], body: SiteBody = 
 
 @private.post("/start")
 def start(ws: Annotated[Workspace, Depends(running_workspace)], body: StartBody = Body(default_factory=StartBody)):
-    if body.site not in PROVIDERS:
-        raise HTTPException(400, f"Unknown site '{body.site}'")
     job = ws.job
-    if job.snapshot()["access"].get(body.site) == "required":
-        raise HTTPException(409, "Check access for this database first")
-    job.site = body.site
-    return {"started": job.start(body.indices)}
+    by_site = body.sites or {body.site: body.indices if body.indices is not None else list(range(len(job.rows)))}
+    unknown = [s for s in by_site if s not in PROVIDERS]
+    if unknown:
+        raise HTTPException(400, f"Unknown site '{unknown[0]}'")
+    access = job.snapshot()["access"]
+    locked = [PROVIDERS[s].label for s in by_site if by_site[s] and access.get(s) == "required"]
+    if locked:
+        raise HTTPException(409, f"Check access first: {', '.join(locked)}")
+    return {"started": job.start({i: s for s, idxs in by_site.items() for i in idxs})}
 
 
 @private.post("/stop")

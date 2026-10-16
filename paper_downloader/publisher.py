@@ -9,6 +9,10 @@ from .ebsco import NotFound
 
 PDF_BUTTON = re.compile(r"^\s*(download\s+)?(full[\s-]*text\s+)?pdf\b|download\s+pdf|view\s+pdf", re.I)
 FIND_WAIT_S = 20
+
+
+class HumanCheck(NotFound):
+    """The site is asking for a captcha: stop hammering it and let a person solve it."""
 SUPPLEMENT = re.compile(r"supplement|/esm/|mediaobjects|moesm", re.I)
 
 
@@ -111,7 +115,7 @@ def download_pdf(page: Page, url: str, loaded: bool = False) -> bytes:
         _pdf_control(page).locator("visible=true").first.wait_for(timeout=FIND_WAIT_S * 1000)
     except PlaywrightTimeout:
         if re.search(r"just a moment|verify you are human", page.title() + page.inner_text("body")[:500], re.I):
-            raise NotFound("The publisher shows a human check: solve it once in the Remote browser and retry")
+            raise HumanCheck("The publisher shows a human check: solve it once in the remote browser and retry")
         raise NotFound("publisher page has no Download PDF button")
     control = _pick_control(page)
     if control is None:

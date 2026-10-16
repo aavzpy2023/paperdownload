@@ -6,12 +6,14 @@ import subprocess
 import time
 import urllib.request
 from urllib.parse import quote
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
 
 SYSTEM = platform.system()
+START_TIMEOUT_S = 60
 START_URL = os.environ.get("PD_START_URL", "")  # default institution page; each user can set their own
 DEBUG_DIR = Path(__file__).resolve().parent.parent / "debug"
 
@@ -38,6 +40,7 @@ class Chrome:
     port: int
     display: str | None = None
     proc: subprocess.Popen | None = None
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def debugger_up(self) -> bool:
         try:
@@ -47,12 +50,23 @@ class Chrome:
             return False
 
     def launch(self, url: str | None = None) -> None:
-        if self.debugger_up():
+        """Make sure Chrome is up and, if given, open `url` in it. Calls are serialized."""
+        with self._lock:
+            if not self.debugger_up():
+                self._spawn(url)
+                return
             if url:
-                req = urllib.request.Request(f"http://127.0.0.1:{self.port}/json/new?{quote(url, safe=':/?&=%')}", method="PUT")
+                req = urllib.request.Request(
+                    f"http://127.0.0.1:{self.port}/json/new?{quote(url, safe=':/?&=%')}", method="PUT"
+                )
                 urllib.request.urlopen(req, timeout=5)
-            return
+
+    def _spawn(self, url: str | None) -> None:
         self.work_dir.mkdir(parents=True, exist_ok=True)
+        # No Chrome of ours is running here, so these locks are leftovers of a killed one and
+        # would make the new Chrome think the profile is in use and exit.
+        for name in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
+            (self.work_dir / name).unlink(missing_ok=True)
         env = {**os.environ, **({"DISPLAY": self.display} if self.display else {})}
         self.proc = subprocess.Popen(
             [
@@ -71,11 +85,14 @@ class Chrome:
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
-        for _ in range(40):
+        # A busy machine can take a minute to bring Chrome up.
+        for _ in range(START_TIMEOUT_S * 2):
             if self.debugger_up():
                 return
+            if self.proc.poll() is not None:
+                raise RuntimeError(f"Chrome exited while starting (code {self.proc.returncode})")
             time.sleep(0.5)
-        raise RuntimeError("Chrome did not expose the debugging port.")
+        raise RuntimeError("Chrome did not expose the debugging port in time. Try again in a moment.")
 
     def close(self) -> None:
         if self.proc is None:

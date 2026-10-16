@@ -1,19 +1,21 @@
 import random
 import threading
+import time
 from datetime import date
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlparse
 
 from playwright.sync_api import sync_playwright
 
 from . import browser, ebsco, publisher, sciencedirect
-from urllib.parse import urlparse
-
 from .bib import Entry, clean_doi
 from .ebsco import _slug
 from .providers import PROVIDERS, sources_for
+from .throttle import publisher_key, throttle, url_key
 
 PAUSE_RANGE = (10.0, 20.0)
+PROBE_STAGGER = (3.0, 6.0)
 PENDING, RUNNING, DONE, FAILED = "pending", "running", "done", "failed"
 
 
@@ -31,10 +33,10 @@ class Job:
     running: bool = False
     error: str = ""
     chrome: browser.Chrome | None = None
-    site: str = "sciencedirect"
-    selected: set[int] | None = None
+    plan: dict[int, str] = field(default_factory=dict)
     folder: Path | None = None
     access_ok: set[str] = field(default_factory=set)
+    verifying: str = ""
     _stop: threading.Event = field(default_factory=threading.Event)
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -89,11 +91,33 @@ class Job:
         results = []
         if urls and self.chrome is None:
             raise RuntimeError("Browser session is not running")
+        with self._lock:
+            if self.verifying:
+                raise RuntimeError("A verification is already in progress")
+            self.verifying = site
+        try:
+            results = self._probe(urls)
+        finally:
+            self.verifying = ""
+        if all(r["problem"] is None for r in results):
+            self.access_ok.add(site)
+        else:
+            self.access_ok.discard(site)
+        return results
+
+    def _probe(self, urls: list[str]) -> list[dict]:
+        results = []
         if urls:
             with sync_playwright() as pw:
                 br = browser.connect(pw, self.chrome)
                 context = br.contexts[0]
                 for url in urls:
+                    key = url_key(url)
+                    if results:
+                        time.sleep(random.uniform(*PROBE_STAGGER))
+                    if throttle.acquire(key, max_wait=60) == "cooldown":
+                        results.append({"url": url, "problem": "cooling down after a human check"})
+                        continue
                     page = context.new_page()
                     page.bring_to_front()  # visible in the Remote browser while it is checked
                     try:
@@ -102,11 +126,9 @@ class Job:
                         problem = f"{type(e).__name__}: {e}"[:120]
                     finally:
                         page.close()
+                    if problem is None:
+                        throttle.clear(key)
                     results.append({"url": url, "problem": problem})
-        if all(r["problem"] is None for r in results):
-            self.access_ok.add(site)
-        else:
-            self.access_ok.discard(site)
         return results
 
     def snapshot(self) -> dict:
@@ -114,7 +136,7 @@ class Job:
             self._sync_with_folder()
             rows = [
                 {
-                    "key": r.entry.key, "title": r.entry.title, "authors": r.entry.authors,
+                    "key": r.entry.key, "doi": clean_doi(r.entry.doi), "journal": r.entry.journal, "title": r.entry.title, "authors": r.entry.authors,
                     "year": r.entry.year, "sources": sources_for(r.entry), "status": r.status, "detail": r.detail,
                 }
                 for r in self.rows
@@ -128,16 +150,16 @@ class Job:
             for s in sites
         }
         pdf_count = len(list(self.target.glob("*.pdf"))) if self.target.is_dir() else 0
-        return {"access": access, "pdf_count": pdf_count, "running": self.running, "can_zip": can_zip, "error": self.error, "rows": rows, "counts": counts,
+        return {"access": access, "verifying": self.verifying, "pdf_count": pdf_count, "running": self.running, "can_zip": can_zip, "error": self.error, "rows": rows, "counts": counts,
                 "out_dir": str(self.target)}
 
-    def start(self, indices: list[int] | None = None) -> bool:
+    def start(self, plan: dict[int, str]) -> bool:
+        """Download the rows in `plan`, each through the database it maps to."""
         with self._lock:
-            if self.running or not self.rows:
+            plan = {i: s for i, s in plan.items() if 0 <= i < len(self.rows)}
+            if self.running or not plan:
                 return False
-            self.selected = None if indices is None else set(indices)
-            if self.selected is not None and not self.selected:
-                return False
+            self.plan = plan
             self.running = True
             self.error = ""
             self._stop.clear()
@@ -158,18 +180,27 @@ class Job:
                 if self.chrome is None:
                     raise RuntimeError("Browser session is not running")
                 br = browser.connect(pw, self.chrome)
-                title_part, provider = PROVIDERS[self.site].tab_title, PROVIDERS[self.site].module
-                tab = browser.find_tab(br, title_part)
-                base = provider.base_url(tab)
+                anchors: dict[str, tuple] = {}
                 started = False
-                for i, row in enumerate(self.rows):
+                for i in sorted(self.plan):
+                    row, site = self.rows[i], self.plan[i]
                     if self._stop.is_set():
                         break
                     if row.status == DONE:
                         continue
-                    if self.selected is not None and i not in self.selected:
-                        continue
+                    if site not in anchors:
+                        module = PROVIDERS[site].module
+                        tab = browser.find_tab(br, PROVIDERS[site].tab_title)
+                        anchors[site] = (module, tab, module.base_url(tab))
+                    provider, tab, base = anchors[site]
                     if started and self._stop.wait(random.uniform(*PAUSE_RANGE)):
+                        break
+                    key = publisher_key(row.entry, site)
+                    slot = throttle.acquire(key, self._stop)
+                    if slot == "stopped":
+                        break
+                    if slot == "cooldown":
+                        self.error = f"{key} is cooling down after a human check; try again in a few minutes"
                         break
                     started = True
                     self._set(row, RUNNING)
@@ -178,9 +209,11 @@ class Job:
                     try:
                         path = provider.download(page, base, row.entry, self.target)
                         self._set(row, DONE, path.name)
-                    except sciencedirect.Blocked as e:
+                    except (sciencedirect.Blocked, publisher.HumanCheck) as e:
+                        # Keep every user away from this publisher for a while and ask for a new check.
                         self._set(row, PENDING)
-                        self.access_ok.discard(self.site)
+                        throttle.cool_down(key)
+                        self.access_ok.discard(site)
                         self.error = str(e)
                         self._stop.set()
                     except ebsco.NotFound as e:

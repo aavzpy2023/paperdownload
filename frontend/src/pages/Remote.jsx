@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
+import { useAuth } from '../auth.jsx'
+import { Alert, Button, Card, PasswordNote } from '../ui.jsx'
 
 const SRC = '/vnc/vnc.html?autoconnect=1&resize=scale&path=vnc/websockify'
 const PING_MS = 2 * 60 * 1000
@@ -14,6 +16,7 @@ function Viewer() {
   const [attempt, setAttempt] = useState(0)
   const started = useRef(false)
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const back = (state) => navigate('/', { replace: true, state })
 
@@ -47,25 +50,28 @@ function Viewer() {
 
   return (
     <>
-      <div className="card verify">
-        {site && check?.busy && <p>Verifying access for <strong>{site}</strong>: opening one article per publisher in the browser below…</p>}
-        {site && check?.error && <p className="error">{check.error}</p>}
+      <Card className="space-y-3 p-4 sm:p-5">
+        {site && check?.busy && <p className="text-sm text-slate-700"><i className="fa-solid fa-spinner fa-spin mr-2 text-sky-600" />Verifying…</p>}
+        {site && check?.error && <Alert>{check.error}</Alert>}
         {site && check && !check.busy && !check.error && (check.ok
-          ? <p className="done">Access verified. Returning to Downloads…</p>
-          : <>
-              <p className="error">Access is not ready yet:</p>
-              <ul>{check.results.filter((r) => r.problem).map((r) => <li key={r.url}>{new URL(r.url).hostname}: {r.problem}</li>)}</ul>
-              <p>Solve it in the browser below (open the article, tick the captcha or sign in), then verify again.</p>
-            </>)}
-        {!site && <p>Sign in or solve any captcha in the browser below, then close this view.</p>}
-        <div className="bar">
-          {site && check && !check.busy && <button onClick={verify}>Verify again</button>}
-          <button onClick={reconnect} disabled={!ready}>Reconnect</button>
-          <button onClick={() => back()}>Close remote browser</button>
+          ? <Alert kind="ok">Access verified. Returning to Downloads…</Alert>
+          : <div className="space-y-2">
+              <Alert>Access is not ready yet.</Alert>
+              <ul className="list-inside list-disc text-sm text-slate-700">
+                {check.results.filter((r) => r.problem).map((r) => <li key={r.url}>{new URL(r.url).hostname}: {r.problem}</li>)}
+              </ul>
+              <p className="text-sm text-slate-600">Solve it in the browser below (open the article, tick the captcha or sign in), then verify again.</p>
+            </div>)}
+        {!site && <p className="text-sm text-slate-700">Sign in or solve any captcha in the browser below, then close this view.</p>}
+        <PasswordNote guest={user.role === 'guest'} />
+        <div className="flex flex-wrap items-center gap-2">
+          {site && check && !check.busy && <Button kind="primary" onClick={verify}><i className="fa-solid fa-key" /> Verify again</Button>}
+          <Button onClick={reconnect} disabled={!ready || check?.busy}><i className="fa-solid fa-plug" /> Reconnect</Button>
+          <Button onClick={() => back()} title={check?.busy ? 'The verification keeps running; Downloads shows the result' : ''}>Close remote browser</Button>
         </div>
-      </div>
-      {error && <p className="error">{error}</p>}
-      {ready && <iframe key={attempt} title="Remote browser" src={SRC} className="remote" />}
+      </Card>
+      {error && <Alert>{error}</Alert>}
+      {ready && <iframe key={attempt} title="Remote browser" src={SRC} className="h-[75vh] w-full rounded-2xl border border-slate-200 bg-black" />}
     </>
   )
 }

@@ -1,15 +1,13 @@
-# Both services use the host network: nginx reaches the backend on 127.0.0.1:8000
-# and each session's noVNC on 127.0.0.1:61xx (all closed to the LAN). The backend
-# starts one virtual desktop + Chrome per active session; nginx exposes them at
-# /vnc/ only after the backend authorizes the login cookie.
+# nginx is the only published port (81). The backend and each session's noVNC stay on the
+# private compose network; nginx exposes noVNC at /vnc/ only after the backend authorizes
+# the login cookie. State lives in named volumes, so nothing depends on the host user or OS.
 services:
   backend:
     container_name: paperdownloader-backend
     build:
       context: .
       dockerfile: backend/Dockerfile
-    user: "1000:1000"
-    network_mode: host
+    platform: linux/amd64  # Google Chrome has no Linux arm64 build: Apple Silicon runs it emulated
     shm_size: 2gb
     restart: unless-stopped
     environment:
@@ -17,14 +15,20 @@ services:
       - PD_ADMIN_USER
       - PD_ADMIN_PASSWORD
     volumes:
-      - ./:/app
+      - pd_data:/app/data
+      - pd_downloads:/app/downloads
 
   nginx:
     container_name: paperdownloader-nginx
     build:
       context: .
       dockerfile: nginx/Dockerfile
-    network_mode: host
+    ports:
+      - "81:81"
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  pd_data:
+  pd_downloads:

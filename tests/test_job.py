@@ -69,3 +69,15 @@ def test_snapshot_access_states(tmp_path):
 
     job.load([Entry("a", "A", "", "", "10.1016/x", "", ("wos",))])
     assert job.snapshot()["access"] == {"wos": "required"}
+
+
+def test_only_one_verification_runs_at_a_time(tmp_path):
+    import pytest
+
+    job = Job(out_dir=tmp_path)
+    job.load([Entry("a", "A", "", "", "10.1016/x", "", ("wos",))])
+    job.chrome = object()
+    job.verifying = "wos"
+    with pytest.raises(RuntimeError, match="already in progress"):
+        job.verify_access("wos")
+    assert job.snapshot()["verifying"] == "wos"

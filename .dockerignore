@@ -1,7 +1,13 @@
 node_modules
 dist
 chrome-profile
+chrome-profile-container
 downloads
 debug
 data
 .venv
+.git
+.pytest_cache
+bib_files
+tests
+.env

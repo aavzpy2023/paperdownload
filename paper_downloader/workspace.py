@@ -158,7 +158,7 @@ class Manager:
         ws.viewer_procs = [
             _spawn(["x11vnc", "-display", f":{display}", "-forever", "-shared", "-rfbport", str(vnc),
                     "-localhost", "-nopw", "-q"]),
-            _spawn(["websockify", "--web", NOVNC_DIR, f"127.0.0.1:{web}", f"127.0.0.1:{vnc}"]),
+            _spawn(["websockify", "--web", NOVNC_DIR, f"0.0.0.0:{web}", f"127.0.0.1:{vnc}"]),  # reachable from nginx on the private network only
         ]
         # The page connects as soon as the view is reported open, so wait for both listeners.
         if not (_wait_port(vnc) and _wait_port(web)):

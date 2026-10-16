@@ -197,3 +197,26 @@ def test_open_institution_page_needs_a_url(client):
     h = login(client)
     r = client.post("/api/open", json={}, headers=h)
     assert r.status_code == 400
+
+
+def test_start_accepts_a_selection_mixing_databases_but_names_the_locked_ones(client):
+    h = login(client)
+    bib = b"@article{a, title={A}, doi={10.1016/x}}\n@article{b, title={B}, doi={10.1109/y}}"
+    client.post("/api/upload", files={"bib": ("r.bib", bib)}, headers=h)
+
+    r = client.post("/api/start", json={"sites": {"other": [0], "ieee": [1]}}, headers=h)
+    assert r.status_code == 409
+    assert "Other (by DOI)" in r.json()["detail"] and "IEEE Xplore" in r.json()["detail"]
+
+    assert client.post("/api/start", json={"sites": {"nope": [0]}}, headers=h).status_code == 400
+
+
+def test_upload_accepts_nbib_and_rejects_other_formats(client):
+    h = login(client)
+    nbib = b"PMID- 1\nTI  - A title\nDP  - 2020\nLID - 10.1/x [doi]\n"
+    r = client.post("/api/upload", files={"bib": ("export.nbib", nbib)}, headers=h)
+    assert r.status_code == 200 and r.json()["count"] == 1
+    assert client.get("/api/state", headers=h).json()["rows"][0]["sources"] == ["pubmed"]
+
+    bad = client.post("/api/upload", files={"bib": ("refs.ris", b"TY  - JOUR")}, headers=h)
+    assert bad.status_code == 400
