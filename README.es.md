@@ -87,6 +87,19 @@ Consejos:
   lo que evita el captcha de imágenes de Web of Science.
 - Las entradas sin DOI no se pueden obtener desde una editorial y quedan marcadas como fallidas.
 
+## Usarla desde otros computadores de tu red
+
+La app es accesible desde cualquier computador de la misma red en `http://<IP del computador que la ejecuta>:81`.
+El script de inicio muestra esa dirección; si no, busca la IP en la configuración de red (por ejemplo `192.168.1.7`).
+
+- **Windows** puede pedir permiso para que Docker pase por el firewall la primera vez: acepta para *Redes privadas*.
+- **Linux** con `firewalld`: `sudo firewall-cmd --permanent --add-port=81/tcp && sudo firewall-cmd --reload`.
+  Con `ufw`: `sudo ufw allow 81/tcp`.
+- Algunas redes Wi-Fi (de invitados o de campus) aíslan los dispositivos entre sí; usa una red cableada o normal.
+- La conexión es HTTP simple, así que en una red compartida cualquiera podría leer los accesos. Úsala en una red de confianza o pon
+  delante un proxy inverso con HTTPS.
+- Para permitir solo este computador, define `PD_BIND=127.0.0.1` en `.env` y ejecuta `docker compose up -d`.
+
 ## Roles
 
 | Rol | Perfil del navegador | Puede gestionar usuarios |
@@ -100,7 +113,7 @@ Consejos:
 - **Las contraseñas de tu institución y de las editoriales nunca se guardan.** El administrador de contraseñas de Chrome está desactivado; solo la sesión
   de acceso (cookies) permanece en el perfil de las cuentas `admin` y `user`. Los invitados no conservan nada.
 - Las contraseñas propias de la app se guardan cifradas (hash).
-- Solo está abierto el puerto **81**. El backend y los navegadores remotos viven en una red privada de Docker, y la pantalla remota solo se
+- Solo está abierto el puerto **81** (a tu red local; abajo se explica cómo restringirlo). El backend y los navegadores remotos viven en una red privada de Docker, y la pantalla remota solo se
   muestra mientras verificas el acceso, a usuarios con sesión iniciada.
 - La app usa HTTP simple. **No la expongas directamente a internet**; úsala en tu propio computador, detrás de una VPN o
   detrás de un proxy inverso con HTTPS.
@@ -131,6 +144,7 @@ Defínelas en un archivo `.env` junto a `docker-compose.yml` (el script de inici
 | `PD_MAX_SESSIONS` | `6` | Personas que pueden tener un navegador activo a la vez (unos 1 GB de RAM cada una) |
 | `PD_START_URL` | *(vacío)* | Página institucional por defecto para quien no haya puesto la suya |
 | `PD_SECRET_KEY` | *(generada)* | Clave que firma las sesiones de acceso |
+| `PD_BIND` | `0.0.0.0` | Dirección en la que escucha la app; `127.0.0.1` la deja accesible solo desde este computador |
 
 Para usar otro puerto, cambia `"81:81"` en `docker-compose.yml`, por ejemplo `"8081:81"`.
 

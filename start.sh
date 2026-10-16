@@ -67,6 +67,14 @@ done
 curl -fs -o /dev/null "$URL" || die "The app did not start. See the logs with: ${COMPOSE[*]} logs"
 
 say "Ready: $URL"
+if [[ "$OS" == "Darwin" ]]; then
+  LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
+else
+  LAN_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.*src \([0-9.]*\).*/\1/p' || true)"
+fi
+if [[ -n "$LAN_IP" ]]; then
+  printf '\n  From other computers on your network:  \033[1mhttp://%s:81\033[0m\n' "$LAN_IP"
+fi
 if [[ -n "$NEW_PASSWORD" ]]; then
   printf '\n  First login  ->  user: \033[1madmin\033[0m   password: \033[1m%s\033[0m\n  (saved in the .env file; you can change it later in Users)\n' "$NEW_PASSWORD"
 fi

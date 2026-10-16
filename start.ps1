@@ -50,6 +50,8 @@ for ($i = 0; $i -lt 60 -and -not $up; $i++) {
 if (-not $up) { Fail 'The app did not start. See the logs with: docker compose logs' }
 
 Say "Ready: $Url"
+$lan = Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq 'Up' } | Select-Object -First 1
+if ($lan) { Write-Host "`n  From other computers on your network:  http://$($lan.IPv4Address.IPAddress):81" -ForegroundColor Green }
 if ($NewPassword) {
     Write-Host "`n  First login  ->  user: admin   password: $NewPassword" -ForegroundColor Green
     Write-Host '  (saved in the .env file; you can change it later in Users)'

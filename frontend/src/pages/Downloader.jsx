@@ -130,7 +130,16 @@ export default function Downloader() {
   }
   const toggle = (i, on) => setSelected((s) => { const n = new Set(s); on ? n.add(i) : n.delete(i); return n })
   const allShownSelected = shown.length > 0 && shown.every((r) => selected.has(r.i))
-  const copyPath = () => navigator.clipboard?.writeText(state?.out_dir || '').catch(() => null)
+  const copyPath = () => {
+    const text = state?.out_dir || ''
+    if (navigator.clipboard) { navigator.clipboard.writeText(text).catch(() => null); return }
+    // Plain HTTP on a LAN address is not a secure context: fall back to the old selection trick.
+    const box = Object.assign(document.createElement('textarea'), { value: text })
+    document.body.appendChild(box)
+    box.select()
+    document.execCommand('copy')
+    box.remove()
+  }
 
   return (
     <>

@@ -24,7 +24,8 @@ services:
       context: .
       dockerfile: nginx/Dockerfile
     ports:
-      - "81:81"
+      # Reachable from other computers on your network; PD_BIND=127.0.0.1 in .env restricts it to this computer.
+      - "${PD_BIND:-0.0.0.0}:81:81"
     depends_on:
       - backend
     restart: unless-stopped

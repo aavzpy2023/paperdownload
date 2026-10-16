@@ -220,3 +220,21 @@ def test_upload_accepts_nbib_and_rejects_other_formats(client):
 
     bad = client.post("/api/upload", files={"bib": ("refs.ris", b"TY  - JOUR")}, headers=h)
     assert bad.status_code == 400
+
+
+def test_only_admins_can_see_or_change_users(client):
+    admin = login(client)
+    user = add_user(client, admin, "ana", "user")
+    guest = add_user(client, admin, "visitor", "guest")
+    body = {"username": "zzz", "password": "secret1", "role": "admin", "active": False}
+
+    for who in (user, guest):
+        assert client.get("/api/users", headers=who).status_code == 403
+        assert client.post("/api/users", json=body, headers=who).status_code == 403
+        assert client.patch("/api/users/1", json=body, headers=who).status_code == 403
+        assert client.delete("/api/users/1", headers=who).status_code == 403
+        assert "password" not in client.get("/api/auth/me", headers=who).text
+
+    client.cookies.clear()
+    assert client.get("/api/users").status_code == 401
+    assert [u["username"] for u in client.get("/api/users", headers=admin).json()] == ["admin", "ana", "visitor"]

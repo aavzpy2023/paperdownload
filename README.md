@@ -87,6 +87,19 @@ Tips:
   which avoids Web of Science's image captcha.
 - Entries without a DOI cannot be fetched from a publisher and are marked as failed.
 
+## Use it from other computers on your network
+
+The app is reachable from any computer on the same network at `http://<IP of the computer running it>:81`.
+The start script prints that address; otherwise find the IP in your network settings (for example `192.168.1.7`).
+
+- **Windows** may ask to allow Docker through its firewall the first time: accept for *Private networks*.
+- **Linux** with `firewalld`: `sudo firewall-cmd --permanent --add-port=81/tcp && sudo firewall-cmd --reload`.
+  With `ufw`: `sudo ufw allow 81/tcp`.
+- Some Wi-Fi networks (guest or campus Wi-Fi) isolate devices from each other; use a wired or regular network.
+- The connection is plain HTTP, so on a shared network anyone could read the logins. Use it on a network you trust, or put an
+  HTTPS reverse proxy in front.
+- To allow only this computer, set `PD_BIND=127.0.0.1` in `.env` and run `docker compose up -d`.
+
 ## Roles
 
 | Role | Browser profile | Can manage users |
@@ -100,7 +113,7 @@ Tips:
 - **Your institution and publisher passwords are never saved.** Chrome's password manager is disabled; only the login
   session (cookies) stays in the browser profile of `admin` and `user` accounts. Guests keep nothing.
 - The app's own passwords are stored hashed.
-- Only port **81** is open. The backend and the remote browsers live on a private Docker network, and the remote screen is
+- Only port **81** is open (to your local network; see below to restrict it). The backend and the remote browsers live on a private Docker network, and the remote screen is
   shown only while you are verifying access, to signed-in users.
 - The app serves plain HTTP. **Do not expose it directly to the internet**; use it on your own computer, behind a VPN, or
   behind an HTTPS reverse proxy.
@@ -131,6 +144,7 @@ Set these in a `.env` file next to `docker-compose.yml` (the start script create
 | `PD_MAX_SESSIONS` | `6` | People that can have an active browser at the same time (about 1 GB of RAM each) |
 | `PD_START_URL` | *(empty)* | Default institution page for people who have not set their own |
 | `PD_SECRET_KEY` | *(generated)* | Key that signs login sessions |
+| `PD_BIND` | `0.0.0.0` | Address the app listens on; `127.0.0.1` makes it reachable only from this computer |
 
 To use another port, change `"81:81"` in `docker-compose.yml`, for example `"8081:81"`.
 
